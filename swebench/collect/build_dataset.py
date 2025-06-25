@@ -7,7 +7,7 @@ import os
 import re
 from typing import Optional
 
-from swebench.collect.utils import (
+from utils import (
     extract_patches,
     extract_problem_statement_and_hints,
     Repo,
@@ -105,7 +105,8 @@ def create_instance(repo: Repo, pull: dict) -> dict:
 
 
 def is_valid_pull(pull: dict) -> bool:
-    return pull["merged_at"] is not None and bool(pull.get("resolved_issues"))
+	return True
+    #return pull["merged_at"] is not None and bool(pull.get("resolved_issues"))
 
 
 def is_valid_instance(instance: dict) -> bool:

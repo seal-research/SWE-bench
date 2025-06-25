@@ -5,8 +5,10 @@ import json
 import logging
 import os
 from typing import Optional
+from datetime import datetime
 
-from swebench.collect.utils import (
+
+from utils import (
     extract_patches,
     extract_problem_statement_and_hints,
     Repo,
@@ -19,26 +21,32 @@ logger = logging.getLogger(__name__)
 
 
 def create_instance(repo: Repo, pull: dict) -> dict:
-    """
-    Create a single task instance from a pull request, where task instance is:
-
-    {
-        repo (str): owner/repo this task instance is from,
-        pull_number (int): number of PR this task instance is from,
-        base_commit (str): SHA of the base commit PR is based on,
-        patch (str): reference solution as .patch (apply to base commit),
-        test_patch (str): test suite as .patch (apply to base commit),
-    }
-    """
     patch, test_patch = extract_patches(pull, repo)
     problem_statement, hints = extract_problem_statement_and_hints(pull, repo)
+
+    # Fetch resolved issue details
+    issue_numbers = pull.get("resolved_issues", [])
+    resolved_issues = []
+    for issue_num in issue_numbers:
+        try:
+            issue = repo.api.issues.get(owner=repo.owner, repo=repo.name, issue_number=int(issue_num))
+            resolved_issues.append({
+            "number": issue.number,
+            "title": issue.title,
+            "body": issue.body,
+            "html_url": issue.html_url,
+            "created_at": issue.created_at.isoformat() if isinstance(issue.created_at, datetime) else issue.created_at,
+            "state": issue.state
+            })
+
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to fetch issue #{issue_num} - {e}")
+
     return {
         "repo": repo.repo.full_name,
         "pull_number": pull["number"],
-        "instance_id": (repo.repo.full_name + "-" + str(pull["number"])).replace(
-            "/", "__"
-        ),
-        "issue_numbers": pull["resolved_issues"],
+        "instance_id": (repo.repo.full_name + "-" + str(pull["number"])).replace("/", "__"),
+        "resolved_issues": resolved_issues,  # <--- updated
         "base_commit": pull["base"]["sha"],
         "patch": patch,
         "test_patch": test_patch,
@@ -46,6 +54,7 @@ def create_instance(repo: Repo, pull: dict) -> dict:
         "hints_text": hints,
         "created_at": pull["created_at"],
     }
+
 
 
 def is_valid_pull(pull: dict) -> bool:
@@ -57,10 +66,13 @@ def is_valid_pull(pull: dict) -> bool:
     Returns:
         bool: whether PR is valid
     """
-    if pull["merged_at"] is None:
-        return False
+    
+    #return True #changed
+    '''if pull["merged_at"] is None:
+        return False'''
     if "resolved_issues" not in pull or len(pull["resolved_issues"]) < 1:
         return False
+    print(pull["resolved_issues"])
     return True
 
 
@@ -91,6 +103,7 @@ def has_test_patch(instance: dict) -> bool:
     """
     if instance["test_patch"] is None or instance["test_patch"].strip() == "":
         return False
+    #print(instance["test_patch"])
     return True
 
 
