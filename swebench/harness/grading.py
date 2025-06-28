@@ -254,6 +254,7 @@ def get_eval_report(
 
     # Get evaluation logs
     eval_status_map, found = get_logs_eval(test_spec, test_log_path)
+    print(eval_status_map)
 
     if not found:
         return report_map
@@ -264,6 +265,8 @@ def get_eval_report(
         FAIL_TO_PASS: test_spec.FAIL_TO_PASS,
         PASS_TO_PASS: test_spec.PASS_TO_PASS,
     }
+    print(test_spec.FAIL_TO_PASS)
+    print(test_spec.PASS_TO_PASS)
 
     eval_type = EvalType.FAIL_ONLY if test_spec.repo in FAIL_ONLY_REPOS \
         else EvalType.PASS_AND_FAIL

@@ -10,6 +10,7 @@ if platform.system() == "Linux":
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from pathlib import Path, PurePosixPath
+import subprocess, os, shutil, time
 
 from swebench.harness.constants import (
     APPLY_PATCH_FAIL,
@@ -18,6 +19,7 @@ from swebench.harness.constants import (
     DOCKER_USER,
     DOCKER_WORKDIR,
     INSTANCE_IMAGE_BUILD_DIR,
+    DEF_IMAGE_BUILD_DIR,
     KEY_INSTANCE_ID,
     KEY_MODEL,
     KEY_PREDICTION,
@@ -58,6 +60,8 @@ from swebench.harness.utils import (
     str2bool,
     optional_str,
 )
+
+from swebench.harness.apptainer_build import build_def
 
 GIT_APPLY_CMDS = [
     "git apply --verbose",
@@ -338,6 +342,253 @@ def run_instances(
     run_threadpool(run_instance, payloads, max_workers)
     print("All instances run.")
 
+def run_instance_apptainer(
+        test_spec: TestSpec,
+        pred: dict,
+        run_id: str,
+        timeout: int | None = None,
+        ):
+     # Set up logging directory
+    instance_id = test_spec.instance_id
+    model_name_or_path = pred.get("model_name_or_path", "None").replace("/", "__")
+    log_dir = RUN_EVALUATION_LOG_DIR / run_id / model_name_or_path / instance_id
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    # Link the image build dir in the log dir
+    build_dir = DEF_IMAGE_BUILD_DIR / test_spec.instance_image_key.replace(":", "__")
+    image_build_link = log_dir / "image_build_dir"
+    if not image_build_link.exists():
+        try:
+            # link the image build dir in the log dir
+            image_build_link.symlink_to(build_dir.absolute(), target_is_directory=True)
+        except:
+            # some error, idk why
+            pass
+
+    # Set up report file + logger
+    report_path = log_dir / LOG_REPORT
+    if report_path.exists():
+        return instance_id, json.loads(report_path.read_text())
+    log_file = log_dir / LOG_INSTANCE
+    logger = setup_logger(instance_id, log_file)
+
+    try:
+        # build the apptainer sandbox from the .def file
+        def_file = build_dir / "apptainer.def"
+        if not def_file.exists():
+            raise FileNotFoundError(f"Apptainer definition file not found: {def_file}")
+        
+        if not os.path.exists(build_dir / "apptainer_sandbox"):
+            logger.info(f"Building Apptainer sandbox image from {def_file}...")
+            result = subprocess.run(
+                ["apptainer", "build", "--fakeroot", "--sandbox", "apptainer_sandbox", "apptainer.def"],
+                cwd=str(build_dir),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            if result.returncode != 0:
+                logger.info(f"Failed to build Apptainer sandbox image:\n{result.stderr}")
+                raise BuildImageError(
+                    instance_id,
+                    f"Failed to build Apptainer sandbox image: {result.stderr}",
+                    logger,
+                )
+            logger.info(f"Apptainer sandbox image built successfully: {result.stdout}")
+        else:
+            logger.info(f"Apptainer sandbox image already exists, skipping build: {def_file}")
+
+        # Copy model prediction as patch file to sandbox
+        patch_file = Path(log_dir / "patch.diff")
+        patch_file.write_text(pred["model_patch"] or "")
+        logger.info(
+            f"Intermediate patch for {instance_id} written to {patch_file}, now applying to container..."
+        )
+        shutil.copy(patch_file, build_dir / "apptainer_sandbox/testbed/patch.diff")
+
+        
+        # Attempt to apply patch to container (TODO: FIX THIS)
+        applied_patch = False
+        for git_apply_cmd in GIT_APPLY_CMDS:
+            result = subprocess.run(
+                ["apptainer", "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
+                    f"cd apptainer_sandbox/testbed && {git_apply_cmd} patch.diff"],
+                cwd=str(build_dir),
+                capture_output=True,
+                text=True,
+                timeout=timeout
+            )
+            if result.returncode == 0:
+                logger.info(f"{APPLY_PATCH_PASS}:\n{result.stdout}")
+                applied_patch = True
+                break
+            else:
+                logger.info(f"Failed to apply patch to container: {git_apply_cmd}")
+        if not applied_patch:
+            logger.info(f"{APPLY_PATCH_FAIL}:\n{result.stderr}")
+            raise EvaluationError(
+                instance_id,
+                f"{APPLY_PATCH_FAIL}:\n{result.stderr}",
+                logger,
+            )
+        
+        # Get git diff before running eval script
+        result = subprocess.run(
+            ["apptainer", "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
+                "cd apptainer_sandbox/testbed && git -c core.fileMode=false diff"],
+            cwd=str(build_dir),
+            capture_output=True,
+            text=True,
+            timeout=timeout
+        )
+        git_diff_output_before = result.stdout.strip()
+        logger.info(f"Git diff before:\n{git_diff_output_before}")
+
+        eval_file = Path(log_dir / "eval.sh")
+        cwd = os.getcwd()
+        eval_script = test_spec.eval_script.replace(" /", f" {cwd}/" + f"{str(build_dir)}/apptainer_sandbox/")
+        eval_file.write_text(eval_script)
+        logger.info(f"Eval script for {instance_id} written to {eval_file}; copying to sandbox...")
+        shutil.copy(eval_file, build_dir / "apptainer_sandbox/eval.sh")
+
+        # Run eval script, write output to logs
+        logger.info(f"Running eval script for {instance_id}...")
+        start_time = time.time()
+
+        try:
+            result = subprocess.run(
+                ["apptainer", "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
+                 "cd apptainer_sandbox && bash eval.sh"],
+                cwd=str(build_dir),
+                capture_output=True,
+                text=True,
+                timeout=timeout
+            )
+            
+        except subprocess.TimeoutExpired as e:
+            logger.error(f"Process timed out after {timeout} seconds")
+            raise EvaluationError(
+                instance_id,
+                f"Test timed out after {timeout} seconds.",
+                logger,
+            )
+        except Exception as e:
+            logger.error(f"Error during process execution: {e}")
+            raise
+        
+        end_time = time.time()
+        process_time = end_time - start_time
+        
+        test_output_path = log_dir / LOG_TEST_OUTPUT
+        logger.info(f'Test runtime: {process_time} seconds')
+        with open(test_output_path, "w") as f:
+            if result.stderr:
+                for line in result.stderr.splitlines():
+                    if ">>>>> End Test Output" in line:
+                        f.write(result.stdout)
+                    f.write(f"{line}\n")
+            logger.info(f"Test output for {instance_id} written to {test_output_path}")
+            if result.returncode != 0:
+                f.write(f"\n\nProcess returned non-zero exit code: {result.returncode}")
+                raise EvaluationError(
+                    instance_id,
+                    f"Test failed with exit code {result.returncode}: {result.stderr}",
+                    logger,
+                )
+        
+        # Get git diff after running eval script
+        result = subprocess.run(
+            ["apptainer", "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
+                "cd apptainer_sandbox/testbed && git -c core.fileMode=false diff"],
+            cwd=str(build_dir),
+            capture_output=True,
+            text=True,
+            timeout=timeout
+        )
+        git_diff_output_after = result.stdout.strip()
+
+        # Check if git diff changed after running eval script
+        logger.info(f"Git diff after:\n{git_diff_output_after}")
+        if git_diff_output_after != git_diff_output_before:
+            logger.info(f"Git diff changed after running eval script")
+        
+        # Get report from test output
+        logger.info(f"Grading answer for {instance_id}...")
+        report = get_eval_report(
+            test_spec=test_spec,
+            prediction=pred,
+            test_log_path=test_output_path,
+            include_tests_status=True,
+        )
+        logger.info(
+            f"report: {report}\n"
+            f"Result for {instance_id}: resolved: {report[instance_id]['resolved']}"
+        )
+
+        # Write report to report.json
+        with open(report_path, "w") as f:
+            f.write(json.dumps(report, indent=4))
+        
+        return instance_id, report
+    except EvaluationError as e:
+        error_msg = traceback.format_exc()
+        logger.info(error_msg)
+        print(e)
+    except BuildImageError as e:
+        error_msg = traceback.format_exc()
+        logger.info(error_msg)
+        print(e)
+    except Exception as e:
+        error_msg = (f"Error in evaluating model for {instance_id}: {e}\n"
+                     f"{traceback.format_exc()}\n"
+                     f"Check ({logger.log_file}) for more information.")
+        logger.error(error_msg)
+    finally:
+        # Cleaning sandbox
+        logger.info("Cleaning up Apptainer sandbox...")
+        # Remove the Apptainer sandbox directory
+        sandbox_path = build_dir / "apptainer_sandbox"
+        try:
+            if sandbox_path.exists():
+                shutil.rmtree(sandbox_path, ignore_errors=True)
+                logger.info(f"Removed Apptainer sandbox: {sandbox_path}")
+            else:
+                logger.info(f"Apptainer sandbox not found: {sandbox_path}")
+        except Exception as e:
+            logger.error(f"Failed to remove Apptainer sandbox: {e}")
+        # close the logger
+        close_logger(logger)
+    return
+
+def run_instance_apptainers(
+        predictions: dict,
+        instances: list,
+        cache_level: str,
+        clean: bool,
+        force_rebuild: bool,
+        max_workers: int,
+        run_id: str,
+        timeout: int,
+        ):
+    test_specs = list(map(make_test_spec, instances))
+    # run instances in parallel
+    print(f"Running {len(instances)} instances...")
+    # run instances in parallel
+    payloads = []
+    for test_spec in test_specs:
+        payloads.append(
+            (
+                test_spec,
+                predictions[test_spec.instance_id],
+                run_id,
+                timeout,
+            )
+        )
+
+    # run instances in parallel
+    print(f"Running {len(instances)} instances...")
+    run_threadpool(run_instance_apptainer, payloads, max_workers)
+    print("All instances run.")
 
 def get_dataset_from_preds(
     dataset_name: str,
@@ -456,6 +707,7 @@ def main(
     modal: bool,
     instance_image_tag: str = "latest",
     report_dir: str = ".",
+    use_apptainer: bool = False,
 ):
     """
     Run evaluation harness for the given dataset and predictions.
@@ -504,6 +756,10 @@ def main(
     existing_images = list_images(client)
     if not dataset:
         print("No instances to run.")
+    elif use_apptainer:
+        # generate .def file and build .sif + run instances with apptainer
+        build_def(dataset)
+        run_instance_apptainers(predictions, dataset, cache_level, clean, force_rebuild, max_workers, run_id, timeout)
     else:
         # build environment images + run instances
         if namespace is None and not rewrite_reports:
@@ -614,6 +870,9 @@ if __name__ == "__main__":
 
     # Modal execution args
     parser.add_argument("--modal", type=str2bool, default=False, help="Run on Modal")
+
+
+    parser.add_argument("--use_apptainer", type=str2bool, default=False, help="use apptainer or docker")
 
     args = parser.parse_args()
     main(**vars(args))
