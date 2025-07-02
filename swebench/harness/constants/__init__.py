@@ -16,6 +16,7 @@ from swebench.harness.constants.rust import *
 BASE_IMAGE_BUILD_DIR = Path("logs/build_images/base")
 ENV_IMAGE_BUILD_DIR = Path("logs/build_images/env")
 INSTANCE_IMAGE_BUILD_DIR = Path("logs/build_images/instances")
+DEF_IMAGE_BUILD_DIR = Path("logs/build_images/def")
 RUN_EVALUATION_LOG_DIR = Path("logs/run_evaluation")
 RUN_VALIDATION_LOG_DIR = Path("logs/run_validation")
 

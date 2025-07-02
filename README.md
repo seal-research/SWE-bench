@@ -55,11 +55,14 @@ SWE-bench uses Docker for reproducible evaluations.
 Follow the instructions in the [Docker setup guide](https://docs.docker.com/engine/install/) to install Docker on your machine.
 If you're setting up on Linux, we recommend seeing the [post-installation steps](https://docs.docker.com/engine/install/linux-postinstall/) as well.
 
+Follow the instructions in the [Apptainer setup guide](https://apptainer.org/docs/admin/main/installation.html) to install Apptainer on your machine.
+Currently, it only test on linux OS, it can't be run on MacOS or Windows with VM. 
+
 Finally, to build SWE-bench from source, follow these steps:
 ```bash
-git clone git@github.com:princeton-nlp/SWE-bench.git
+git clone git@github.com:seal-research/SWE-bench.git
 cd SWE-bench
-pip install -e .
+pip install .
 ```
 
 Test your installation by running:
