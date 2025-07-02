@@ -103,3 +103,4 @@ def build_def(dataset):
         finally:
             logger.info("Finished building definition file.")
             close_logger(logger)  # functions that create loggers should close them
+        
