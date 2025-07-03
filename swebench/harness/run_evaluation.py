@@ -69,6 +69,7 @@ GIT_APPLY_CMDS = [
     "patch --batch --fuzz=5 -p1 -i",
 ]
 
+APPTAINER_BASH = "apptainer" if shutil.which("apptainer") else "singularity"
 
 def run_instance(
     test_spec: TestSpec,
@@ -381,7 +382,7 @@ def run_instance_apptainer(
         if not os.path.exists(build_dir / "apptainer_sandbox"):
             logger.info(f"Building Apptainer sandbox image from {def_file}...")
             result = subprocess.run(
-                ["apptainer", "build", "--fakeroot", "--sandbox", "apptainer_sandbox", "apptainer.def"],
+                [APPTAINER_BASH, "build", "--fakeroot", "--sandbox", "apptainer_sandbox", "apptainer.def"],
                 cwd=str(build_dir),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -411,7 +412,7 @@ def run_instance_apptainer(
         applied_patch = False
         for git_apply_cmd in GIT_APPLY_CMDS:
             result = subprocess.run(
-                ["apptainer", "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
+                [APPTAINER_BASH, "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
                     f"cd apptainer_sandbox/testbed && {git_apply_cmd} patch.diff"],
                 cwd=str(build_dir),
                 capture_output=True,
@@ -434,7 +435,7 @@ def run_instance_apptainer(
         
         # Get git diff before running eval script
         result = subprocess.run(
-            ["apptainer", "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
+            [APPTAINER_BASH, "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
                 "cd apptainer_sandbox/testbed && git -c core.fileMode=false diff"],
             cwd=str(build_dir),
             capture_output=True,
@@ -457,7 +458,7 @@ def run_instance_apptainer(
 
         try:
             result = subprocess.run(
-                ["apptainer", "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
+                [APPTAINER_BASH, "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
                  "cd apptainer_sandbox && bash eval.sh"],
                 cwd=str(build_dir),
                 capture_output=True,
@@ -498,7 +499,7 @@ def run_instance_apptainer(
         
         # Get git diff after running eval script
         result = subprocess.run(
-            ["apptainer", "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
+            [APPTAINER_BASH, "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
                 "cd apptainer_sandbox/testbed && git -c core.fileMode=false diff"],
             cwd=str(build_dir),
             capture_output=True,
@@ -751,9 +752,9 @@ def main(
     # run instances locally
     if platform.system() == "Linux":
         resource.setrlimit(resource.RLIMIT_NOFILE, (open_file_limit, open_file_limit))
-    client = docker.from_env()
+    
+    client = None
 
-    existing_images = list_images(client)
     if not dataset:
         print("No instances to run.")
     elif use_apptainer:
@@ -761,6 +762,9 @@ def main(
         build_def(dataset)
         run_instance_apptainers(predictions, dataset, cache_level, clean, force_rebuild, max_workers, run_id, timeout)
     else:
+        client = docker.from_env()
+        existing_images = list_images(client)
+
         # build environment images + run instances
         if namespace is None and not rewrite_reports:
             build_env_images(client, dataset, force_rebuild, max_workers)
@@ -778,8 +782,9 @@ def main(
             rewrite_reports=rewrite_reports,
         )
 
-    # clean images + make final report
-    clean_images(client, existing_images, cache_level, clean)
+        # clean images + make final report
+        clean_images(client, existing_images, cache_level, clean)
+
     return make_run_report(predictions, full_dataset, run_id, client)
 
 
