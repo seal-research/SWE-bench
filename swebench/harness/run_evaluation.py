@@ -28,6 +28,7 @@ from swebench.harness.constants import (
     LOG_TEST_OUTPUT,
     RUN_EVALUATION_LOG_DIR,
     UTF8,
+    APPTAINER_BASH,
 )
 from swebench.harness.docker_utils import (
     clean_images,
@@ -68,8 +69,6 @@ GIT_APPLY_CMDS = [
     "git apply --verbose --reject",
     "patch --batch --fuzz=5 -p1 -i",
 ]
-
-APPTAINER_BASH = "apptainer" if shutil.which("apptainer") else "singularity"
 
 def run_instance(
     test_spec: TestSpec,
@@ -374,30 +373,30 @@ def run_instance_apptainer(
     logger = setup_logger(instance_id, log_file)
 
     try:
-        # build the apptainer sandbox from the .def file
-        def_file = build_dir / "apptainer.def"
-        if not def_file.exists():
-            raise FileNotFoundError(f"Apptainer definition file not found: {def_file}")
+        # # build the apptainer sandbox from the .def file
+        # def_file = build_dir / "apptainer.def"
+        # if not def_file.exists():
+        #     raise FileNotFoundError(f"Apptainer definition file not found: {def_file}")
         
-        if not os.path.exists(build_dir / "apptainer_sandbox"):
-            logger.info(f"Building Apptainer sandbox image from {def_file}...")
-            result = subprocess.run(
-                [APPTAINER_BASH, "build", "--fakeroot", "--sandbox", "apptainer_sandbox", "apptainer.def"],
-                cwd=str(build_dir),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            if result.returncode != 0:
-                logger.info(f"Failed to build Apptainer sandbox image:\n{result.stderr}")
-                raise BuildImageError(
-                    instance_id,
-                    f"Failed to build Apptainer sandbox image: {result.stderr}",
-                    logger,
-                )
-            logger.info(f"Apptainer sandbox image built successfully: {result.stdout}")
-        else:
-            logger.info(f"Apptainer sandbox image already exists, skipping build: {def_file}")
+        # if not os.path.exists(build_dir / "apptainer_sandbox"):
+        #     logger.info(f"Building Apptainer sandbox image from {def_file}...")
+        #     result = subprocess.run(
+        #         [APPTAINER_BASH, "build", "--fakeroot", "--sandbox", "apptainer_sandbox", "apptainer.def"],
+        #         cwd=str(build_dir),
+        #         stdout=subprocess.PIPE,
+        #         stderr=subprocess.PIPE,
+        #         text=True
+        #     )
+        #     if result.returncode != 0:
+        #         logger.info(f"Failed to build Apptainer sandbox image:\n{result.stderr}")
+        #         raise BuildImageError(
+        #             instance_id,
+        #             f"Failed to build Apptainer sandbox image: {result.stderr}",
+        #             logger,
+        #         )
+        #     logger.info(f"Apptainer sandbox image built successfully: {result.stdout}")
+        # else:
+        #     logger.info(f"Apptainer sandbox image already exists, skipping build: {def_file}")
 
         # Copy model prediction as patch file to sandbox
         patch_file = Path(log_dir / "patch.diff")
