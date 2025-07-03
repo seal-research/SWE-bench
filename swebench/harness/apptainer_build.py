@@ -1,11 +1,6 @@
 from __future__ import annotations
 
-import logging
-import re, os, shutil
-import traceback
-from tqdm import tqdm
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
+import shutil
 import subprocess
 
 from swebench.harness.constants import DEF_IMAGE_BUILD_DIR, APPTAINER_BASH
@@ -15,11 +10,7 @@ from swebench.harness.docker_build import (
     setup_logger,
 )
 
-from swebench.harness.test_spec.test_spec import (
-    get_test_specs_from_dataset,
-    make_test_spec,
-    TestSpec,
-)
+from swebench.harness.test_spec.test_spec import get_test_specs_from_dataset
 
 from swebench.harness.docker_build import BuildImageError
 
@@ -80,20 +71,7 @@ def build_def(dataset):
         logger = setup_logger("def", build_dir / "build_image.log")
         logger.info("Building image def\n")
 
-        # if not os.path.exists(DEF_IMAGE_BUILD_DIR):
-        #     os.mkdir(DEF_IMAGE_BUILD_DIR)
-
-        # build_dir = DEF_IMAGE_BUILD_DIR / test_spec.instance_image_key.replace(":", "__")
-        # if not os.path.exists(build_dir):
-        #     os.mkdir(build_dir)
-
-        try:    
-            # # Write the Apptainer definition file
-            # logger.info("Writing Apptainer definition file...")
-            # def_file_path = build_dir / "apptainer.def"
-            # with open(def_file_path, "w") as def_file:
-            #     def_file.write(APPTAINER_DEF_FORMAT)
-            
+        try:
             # Pull the Apptainer base image
             logger.info("Pulling Apptainer image...")
             result = subprocess.run(
