@@ -522,6 +522,7 @@ def run_instance_apptainer(
         # Cleaning sandbox
         logger.info("Cleaning up Apptainer sandbox...")
         # Remove the Apptainer sandbox directory
+        apptainer_base_file = build_dir / "apptainer_base.sif"
         sandbox_path = build_dir / "apptainer_sandbox"
         try:
             if sandbox_path.exists():
@@ -529,8 +530,13 @@ def run_instance_apptainer(
                 logger.info(f"Removed Apptainer sandbox: {sandbox_path}")
             else:
                 logger.info(f"Apptainer sandbox not found: {sandbox_path}")
+            if apptainer_base_file.exists():
+                os.remove(apptainer_base_file)
+                logger.info(f"Removed Apptainer base image file: {apptainer_base_file}")
+            else:
+                logger.info(f"Apptainer base image file not found: {apptainer_base_file}")
         except Exception as e:
-            logger.error(f"Failed to remove Apptainer sandbox: {e}")
+            logger.error(f"Failed to remove Apptainer sandbox or base image file: {e}")
         # close the logger
         close_logger(logger)
     return

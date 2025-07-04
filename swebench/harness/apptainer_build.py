@@ -127,6 +127,7 @@ def build_def(dataset):
                 if result.returncode != 0:
                     logger.info(f"Failed to run {setup_script_name} in Apptainer sandbox:\n{result.stderr}")
                     raise BuildImageError(
+                        test_spec.instance_id,
                         f"Failed to run {setup_script_name} in Apptainer sandbox: {result.stderr}",
                         logger,
                     )
@@ -136,6 +137,6 @@ def build_def(dataset):
         except Exception as e:
             logger.error(f"Error building image: {e}")
         finally:
-            logger.info("Finished building definition file.")
+            logger.info("Finished building Apptainer sandbox.")
             close_logger(logger)  # functions that create loggers should close them
         
