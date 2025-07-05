@@ -6,10 +6,15 @@ from tempfile import TemporaryDirectory
 from tqdm import tqdm
 
 REPO_URL = "https://github.com/spring-projects/spring-boot.git"
-INPUT_FILE = "spring-boot-task-instances.jsonl"
+INPUT_FILE = "spring-boot-task-instance.jsonl"
 OUTPUT_FILE = "spring-boot-validated-instances.jsonl"
 FAIL_FILE = "spring-boot-failed-builds.jsonl"
-MAX_LOG_SIZE = 3000  # Truncate logs to avoid bloating JSONL
+MAX_LOG_SIZE = 10000  # Truncate logs to avoid bloating JSONL
+
+if os.name == "nt":
+    gradle_cmd = ["gradlew.bat", "build", "-x", "test", "--build-cache", "--daemon"]
+else:
+    gradle_cmd = ["./gradlew", "build", "-x", "test", "--build-cache", "--daemon"]
 
 
 def run_cmd(cmd, cwd):
@@ -43,6 +48,30 @@ def extract_submodule_from_patch(patch_text):
     return None
 
 
+def disable_global_werror(repo_dir):
+    """
+    Injects code into root `build.gradle` to disable `-Werror` globally.
+    """
+    gradle_root = Path(repo_dir) / "build.gradle"
+    if gradle_root.exists():
+        try:
+            with open(gradle_root, "a") as f:
+                f.write("""
+
+// --- PATCHED BY SCRIPT: Disable global -Werror ---
+allprojects {
+    tasks.withType(JavaCompile).configureEach {
+        options.compilerArgs.removeAll { it == '-Werror' }
+    }
+}
+""")
+            print("✅ Patched root build.gradle to remove -Werror globally.")
+        except Exception as e:
+            print(f"⚠️ Failed to patch root build.gradle: {e}")
+    else:
+        print(f"⚠️ Root build.gradle not found at {gradle_root}")
+
+
 def validate_instance(instance):
     result = {
         "instance_id": instance.get("instance_id"),
@@ -63,10 +92,13 @@ def validate_instance(instance):
             result["patch_build_log"] = f" Clone failed:\n{log[:MAX_LOG_SIZE]}"
             return result
 
+        print(f"📦 Cloned repo to: {repo_dir}")
         success, log = run_cmd(["git", "checkout", instance["base_commit"]], cwd=str(repo_dir))
         if not success:
             result["patch_build_log"] = f"Checkout failed:\n{log[:MAX_LOG_SIZE]}"
             return result
+
+        disable_global_werror(repo_dir)  # <<< Inject -Werror removal
 
         success, log = apply_patch(instance["patch"], cwd=str(repo_dir), name="patch.diff")
         if not success:
@@ -79,13 +111,16 @@ def validate_instance(instance):
             result["patch_build_log"] = " Could not determine submodule from patch."
             return result
 
-        gradlew = repo_dir / "gradlew"
+        gradlew = repo_dir / ("gradlew.bat" if os.name == "nt" else "gradlew")
         if not gradlew.exists():
             result["patch_build_log"] = " gradlew not found in repo root."
             return result
 
+        gradle_exec = str(gradlew)
         gradle_module = ":" + submodule_path.replace("/", ":")
-        build_cmd = ["./gradlew", gradle_module + ":build", "-x", "test"]
+        build_cmd = [gradle_exec, gradle_module + ":build", "-x", "test", "--build-cache", "--daemon"]
+
+        print(f"⚙️  Running build: {build_cmd}")
         success, log = run_cmd(build_cmd, cwd=repo_dir)
         result["patch_build_passed"] = success
         result["patch_build_log"] = log[:MAX_LOG_SIZE]
@@ -93,6 +128,7 @@ def validate_instance(instance):
         if not success:
             return result
 
+        # If test patch is available
         if "test_patch" in instance and instance["test_patch"]:
             success, log = apply_patch(instance["test_patch"], cwd=str(repo_dir), name="test_patch.diff")
             if not success:
@@ -100,7 +136,7 @@ def validate_instance(instance):
                 return result
             result["test_patch_applied"] = True
 
-            test_cmd = ["./gradlew", gradle_module + ":test"]
+            test_cmd = [gradle_exec, gradle_module + ":test", "--build-cache", "--daemon"]
             success, log = run_cmd(test_cmd, cwd=repo_dir)
             result["test_build_passed"] = success
             result["test_build_log"] = log[:MAX_LOG_SIZE]
@@ -109,14 +145,14 @@ def validate_instance(instance):
 
 
 def main():
-    validated, failed = [], []
+    validated, failed = [],[]
 
     with open(INPUT_FILE, "r") as f:
         instances = [json.loads(line) for line in f]
 
     for instance in tqdm(instances, desc=" Validating PRs"):
         pr_num = instance.get("pull_number", "???")
-        print(f"\n PR #{pr_num} validating...")
+        print(f"\n🔍 Validating PR #{pr_num}")
 
         result = validate_instance(instance)
         instance.update(result)
@@ -125,7 +161,7 @@ def main():
             print(f"✅ Patch build passed for PR #{pr_num}")
             validated.append(instance)
         else:
-            print(f"Patch build failed for PR #{pr_num}")
+            print(f"❌ Patch build failed for PR #{pr_num}")
             failed.append(instance)
 
     with open(OUTPUT_FILE, "w") as f:
