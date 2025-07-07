@@ -62,7 +62,7 @@ from swebench.harness.utils import (
     optional_str,
 )
 
-from swebench.harness.apptainer_build import build_def
+from swebench.harness.apptainer_build import build_sandbox
 
 GIT_APPLY_CMDS = [
     "git apply --verbose",
@@ -347,6 +347,7 @@ def run_instance_apptainer(
         pred: dict,
         run_id: str,
         timeout: int | None = None,
+        rm_image: bool = True,
         ):
      # Set up logging directory
     instance_id = test_spec.instance_id
@@ -519,24 +520,25 @@ def run_instance_apptainer(
                      f"Check ({logger.log_file}) for more information.")
         logger.error(error_msg)
     finally:
-        # Cleaning sandbox
-        logger.info("Cleaning up Apptainer sandbox...")
-        # Remove the Apptainer sandbox directory
-        apptainer_base_file = build_dir / "apptainer_base.sif"
-        sandbox_path = build_dir / "apptainer_sandbox"
-        try:
-            if sandbox_path.exists():
-                shutil.rmtree(sandbox_path, ignore_errors=True)
-                logger.info(f"Removed Apptainer sandbox: {sandbox_path}")
-            else:
-                logger.info(f"Apptainer sandbox not found: {sandbox_path}")
-            if apptainer_base_file.exists():
-                os.remove(apptainer_base_file)
-                logger.info(f"Removed Apptainer base image file: {apptainer_base_file}")
-            else:
-                logger.info(f"Apptainer base image file not found: {apptainer_base_file}")
-        except Exception as e:
-            logger.error(f"Failed to remove Apptainer sandbox or base image file: {e}")
+        if rm_image:
+            # Cleaning sandbox
+            logger.info("Cleaning up Apptainer sandbox...")
+            # Remove the Apptainer sandbox directory
+            apptainer_base_file = build_dir / "apptainer_base.sif"
+            sandbox_path = build_dir / "apptainer_sandbox"
+            try:
+                if sandbox_path.exists():
+                    shutil.rmtree(sandbox_path, ignore_errors=True)
+                    logger.info(f"Removed Apptainer sandbox: {sandbox_path}")
+                else:
+                    logger.info(f"Apptainer sandbox not found: {sandbox_path}")
+                if apptainer_base_file.exists():
+                    os.remove(apptainer_base_file)
+                    logger.info(f"Removed Apptainer base image file: {apptainer_base_file}")
+                else:
+                    logger.info(f"Apptainer base image file not found: {apptainer_base_file}")
+            except Exception as e:
+                logger.error(f"Failed to remove Apptainer sandbox or base image file: {e}")
         # close the logger
         close_logger(logger)
     return
@@ -738,8 +740,8 @@ def main(
     if not dataset:
         print("No instances to run.")
     elif use_apptainer:
-        # generate .def file and build .sif + run instances with apptainer
-        build_def(dataset)
+        # pull .sif + build sandbox with apptainer
+        build_sandbox(dataset)
         run_instance_apptainers(predictions, dataset, cache_level, clean, force_rebuild, max_workers, run_id, timeout)
     else:
         client = docker.from_env()

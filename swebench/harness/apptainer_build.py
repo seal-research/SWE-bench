@@ -58,7 +58,7 @@ From: ubuntu:22.04
     echo "source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed" >> ~/.bashrc
 """
 
-def build_def(dataset):
+def build_sandbox(dataset):
     test_specs = get_test_specs_from_dataset(dataset)
     for test_spec in test_specs:
         # build setup file and put in logs/instance_id folder
