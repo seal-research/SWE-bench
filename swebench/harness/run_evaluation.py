@@ -150,7 +150,10 @@ def run_instance(
 
         # Copy model prediction as patch file to container
         patch_file = Path(log_dir / "patch.diff")
-        patch_file.write_text(pred[KEY_PREDICTION] or "")
+        if isinstance(pred[KEY_PREDICTION], str):
+            patch_file.write_text(pred[KEY_PREDICTION] or "")
+        else:
+            patch_file.write_text(pred[KEY_PREDICTION][KEY_PREDICTION] or "")
         logger.info(
             f"Intermediate patch for {instance_id} written to {patch_file}, now applying to container..."
         )
@@ -376,7 +379,10 @@ def run_instance_apptainer(
     try:
         # Copy model prediction as patch file to sandbox
         patch_file = Path(log_dir / "patch.diff")
-        patch_file.write_text(pred["model_patch"] or "")
+        if isinstance(pred[KEY_PREDICTION], str):
+            patch_file.write_text(pred[KEY_PREDICTION] or "")
+        else:
+            patch_file.write_text(pred[KEY_PREDICTION][KEY_PREDICTION] or "")
         logger.info(
             f"Intermediate patch for {instance_id} written to {patch_file}, now applying to container..."
         )
