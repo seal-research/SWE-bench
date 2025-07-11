@@ -28,6 +28,7 @@ from swebench.harness.constants import (
     LOG_TEST_OUTPUT,
     RUN_EVALUATION_LOG_DIR,
     UTF8,
+    APPTAINER_BASH,
 )
 from swebench.harness.docker_utils import (
     clean_images,
@@ -61,14 +62,13 @@ from swebench.harness.utils import (
     optional_str,
 )
 
-from swebench.harness.apptainer_build import build_def
+from swebench.harness.apptainer_build import build_sandbox
 
 GIT_APPLY_CMDS = [
     "git apply --verbose",
     "git apply --verbose --reject",
     "patch --batch --fuzz=5 -p1 -i",
 ]
-
 
 def run_instance(
     test_spec: TestSpec,
@@ -150,7 +150,10 @@ def run_instance(
 
         # Copy model prediction as patch file to container
         patch_file = Path(log_dir / "patch.diff")
-        patch_file.write_text(pred[KEY_PREDICTION] or "")
+        if isinstance(pred[KEY_PREDICTION], str):
+            patch_file.write_text(pred[KEY_PREDICTION] or "")
+        else:
+            patch_file.write_text(pred[KEY_PREDICTION][KEY_PREDICTION] or "")
         logger.info(
             f"Intermediate patch for {instance_id} written to {patch_file}, now applying to container..."
         )
@@ -347,6 +350,7 @@ def run_instance_apptainer(
         pred: dict,
         run_id: str,
         timeout: int | None = None,
+        rm_image: bool = True,
         ):
      # Set up logging directory
     instance_id = test_spec.instance_id
@@ -373,34 +377,12 @@ def run_instance_apptainer(
     logger = setup_logger(instance_id, log_file)
 
     try:
-        # build the apptainer sandbox from the .def file
-        def_file = build_dir / "apptainer.def"
-        if not def_file.exists():
-            raise FileNotFoundError(f"Apptainer definition file not found: {def_file}")
-        
-        if not os.path.exists(build_dir / "apptainer_sandbox"):
-            logger.info(f"Building Apptainer sandbox image from {def_file}...")
-            result = subprocess.run(
-                ["apptainer", "build", "--fakeroot", "--sandbox", "apptainer_sandbox", "apptainer.def"],
-                cwd=str(build_dir),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            if result.returncode != 0:
-                logger.info(f"Failed to build Apptainer sandbox image:\n{result.stderr}")
-                raise BuildImageError(
-                    instance_id,
-                    f"Failed to build Apptainer sandbox image: {result.stderr}",
-                    logger,
-                )
-            logger.info(f"Apptainer sandbox image built successfully: {result.stdout}")
-        else:
-            logger.info(f"Apptainer sandbox image already exists, skipping build: {def_file}")
-
         # Copy model prediction as patch file to sandbox
         patch_file = Path(log_dir / "patch.diff")
-        patch_file.write_text(pred["model_patch"] or "")
+        if isinstance(pred[KEY_PREDICTION], str):
+            patch_file.write_text(pred[KEY_PREDICTION] or "")
+        else:
+            patch_file.write_text(pred[KEY_PREDICTION][KEY_PREDICTION] or "")
         logger.info(
             f"Intermediate patch for {instance_id} written to {patch_file}, now applying to container..."
         )
@@ -411,7 +393,7 @@ def run_instance_apptainer(
         applied_patch = False
         for git_apply_cmd in GIT_APPLY_CMDS:
             result = subprocess.run(
-                ["apptainer", "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
+                [APPTAINER_BASH, "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
                     f"cd apptainer_sandbox/testbed && {git_apply_cmd} patch.diff"],
                 cwd=str(build_dir),
                 capture_output=True,
@@ -434,7 +416,7 @@ def run_instance_apptainer(
         
         # Get git diff before running eval script
         result = subprocess.run(
-            ["apptainer", "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
+            [APPTAINER_BASH, "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
                 "cd apptainer_sandbox/testbed && git -c core.fileMode=false diff"],
             cwd=str(build_dir),
             capture_output=True,
@@ -457,7 +439,7 @@ def run_instance_apptainer(
 
         try:
             result = subprocess.run(
-                ["apptainer", "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
+                [APPTAINER_BASH, "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
                  "cd apptainer_sandbox && bash eval.sh"],
                 cwd=str(build_dir),
                 capture_output=True,
@@ -498,7 +480,7 @@ def run_instance_apptainer(
         
         # Get git diff after running eval script
         result = subprocess.run(
-            ["apptainer", "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
+            [APPTAINER_BASH, "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
                 "cd apptainer_sandbox/testbed && git -c core.fileMode=false diff"],
             cwd=str(build_dir),
             capture_output=True,
@@ -544,18 +526,25 @@ def run_instance_apptainer(
                      f"Check ({logger.log_file}) for more information.")
         logger.error(error_msg)
     finally:
-        # Cleaning sandbox
-        logger.info("Cleaning up Apptainer sandbox...")
-        # Remove the Apptainer sandbox directory
-        sandbox_path = build_dir / "apptainer_sandbox"
-        try:
-            if sandbox_path.exists():
-                shutil.rmtree(sandbox_path, ignore_errors=True)
-                logger.info(f"Removed Apptainer sandbox: {sandbox_path}")
-            else:
-                logger.info(f"Apptainer sandbox not found: {sandbox_path}")
-        except Exception as e:
-            logger.error(f"Failed to remove Apptainer sandbox: {e}")
+        if rm_image:
+            # Cleaning sandbox
+            logger.info("Cleaning up Apptainer sandbox...")
+            # Remove the Apptainer sandbox directory
+            apptainer_base_file = build_dir / "apptainer_base.sif"
+            sandbox_path = build_dir / "apptainer_sandbox"
+            try:
+                if sandbox_path.exists():
+                    shutil.rmtree(sandbox_path, ignore_errors=True)
+                    logger.info(f"Removed Apptainer sandbox: {sandbox_path}")
+                else:
+                    logger.info(f"Apptainer sandbox not found: {sandbox_path}")
+                if apptainer_base_file.exists():
+                    os.remove(apptainer_base_file)
+                    logger.info(f"Removed Apptainer base image file: {apptainer_base_file}")
+                else:
+                    logger.info(f"Apptainer base image file not found: {apptainer_base_file}")
+            except Exception as e:
+                logger.error(f"Failed to remove Apptainer sandbox or base image file: {e}")
         # close the logger
         close_logger(logger)
     return
@@ -751,16 +740,19 @@ def main(
     # run instances locally
     if platform.system() == "Linux":
         resource.setrlimit(resource.RLIMIT_NOFILE, (open_file_limit, open_file_limit))
-    client = docker.from_env()
+    
+    client = None
 
-    existing_images = list_images(client)
     if not dataset:
         print("No instances to run.")
     elif use_apptainer:
-        # generate .def file and build .sif + run instances with apptainer
-        build_def(dataset)
+        # pull .sif + build sandbox with apptainer
+        build_sandbox(dataset)
         run_instance_apptainers(predictions, dataset, cache_level, clean, force_rebuild, max_workers, run_id, timeout)
     else:
+        client = docker.from_env()
+        existing_images = list_images(client)
+
         # build environment images + run instances
         if namespace is None and not rewrite_reports:
             build_env_images(client, dataset, force_rebuild, max_workers)
@@ -778,8 +770,9 @@ def main(
             rewrite_reports=rewrite_reports,
         )
 
-    # clean images + make final report
-    clean_images(client, existing_images, cache_level, clean)
+        # clean images + make final report
+        clean_images(client, existing_images, cache_level, clean)
+
     return make_run_report(predictions, full_dataset, run_id, client)
 
 

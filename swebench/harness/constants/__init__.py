@@ -1,6 +1,7 @@
 from enum import Enum
 from pathlib import Path
 from typing import TypedDict
+import shutil
 
 from swebench.harness.constants.c import *
 from swebench.harness.constants.go import *
@@ -169,3 +170,5 @@ MAP_REPO_TO_EXT = {
 
 LATEST = "latest"
 USE_X86 = USE_X86_PY
+
+APPTAINER_BASH = "apptainer" if shutil.which("apptainer") else "singularity"
