@@ -1,8 +1,12 @@
 # Constants - Task Instance Version File
 MAP_REPO_TO_VERSION_PATHS = {
+    "camel-ai/camel": ["camel/__init__.py"],
+    "celery/celery": ["celery/__init__.py"],
     "dbt-labs/dbt-core": ["core/dbt/version.py", "core/dbt/__init__.py"],
     "django/django": ["django/__init__.py"],
+    "fastapi/fastapi": ["fastapi/__init__.py"],
     "huggingface/transformers": ["src/transformers/__init__.py"],
+    "keras-team/keras": ["keras/src/version.py"],
     "marshmallow-code/marshmallow": ["src/marshmallow/__init__.py"],
     "mwaskom/seaborn": ["seaborn/__init__.py"],
     "pallets/flask": ["src/flask/__init__.py", "flask/__init__.py"],
@@ -17,8 +21,10 @@ MAP_REPO_TO_VERSION_PATHS = {
     "pyvista/pyvista": ["pyvista/_version.py", "pyvista/__init__.py"],
     "Qiskit/qiskit": ["qiskit/VERSION.txt"],
     "scikit-learn/scikit-learn": ["sklearn/__init__.py"],
+    "scrapy/scrapy": ["scrapy/VERSION"],
     "sphinx-doc/sphinx": ["sphinx/__init__.py"],
     "sympy/sympy": ["sympy/release.py", "sympy/__init__.py"],
+    "ytdl-org/youtube-dl": ["youtube_dl/version.py"],
 }
 
 # Cosntants - Task Instance Version Regex Pattern
@@ -53,6 +59,16 @@ MAP_REPO_TO_VERSION_PATTERNS.update(
 MAP_REPO_TO_VERSION_PATTERNS.update({k: [r"(.*)"] for k in ["Qiskit/qiskit"]})
 MAP_REPO_TO_VERSION_PATTERNS.update(
     {k: [r"version_info = [\d]+,[\d\s]+,"] for k in ["pyvista/pyvista"]}
+)
+MAP_REPO_TO_VERSION_PATTERNS.update(
+    {k: [r"__version__ = ['\"](.*)['\"]", r"VERSION = \\((.*)\\)"]
+    for k in ["fastapi/fastapi", "ytdl-org/youtube-dl", "keras-team/keras", "camel-ai/camel"]}
+)
+MAP_REPO_TO_VERSION_PATTERNS.update(
+    {k: [r"(\S*)"] for k in ["scrapy/scrapy"]}
+)
+MAP_REPO_TO_VERSION_PATTERNS.update(
+    {k: [r"__version__ = ['\"](.*)['\"]"] for k in ["celery/celery"]}
 )
 
 SWE_BENCH_URL_RAW = "https://raw.githubusercontent.com/"

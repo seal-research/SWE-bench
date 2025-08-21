@@ -25,12 +25,37 @@ from swebench.harness.log_parsers import MAP_REPO_TO_PARSER
 
 # MARK: Utility functions
 def test_passed(case: str, sm: dict[str, str]) -> bool:
-    return case in sm and sm[case] in [TestStatus.PASSED.value, TestStatus.XFAIL.value]
+    if case in sm:
+        return sm[case] in [TestStatus.PASSED.value, TestStatus.XFAIL.value]
 
+    # alternate version which can handle case where "case" is something like "test/test_InfoExtractor"
+    # and sm contains test names like "test/test_InfoExtractor.py::TestInfoExtractor::test_download_json"
+    matching_keys = [k for k in sm if k.startswith(case + '::')]
+
+    if len(matching_keys) == 0:
+        return False
+
+    if all(sm[k] in [TestStatus.PASSED.value, TestStatus.XFAIL.value] for k in matching_keys):
+        return True
+
+    return False
 
 def test_failed(case: str, sm: dict[str, str]) -> bool:
-    return case not in sm or sm[case] in [TestStatus.FAILED.value, TestStatus.ERROR.value]
+    if case in sm:
+        return sm[case] in [TestStatus.FAILED.value, TestStatus.ERROR.value]
 
+    # alternate version which can handle case where "case" is something like "test/test_InfoExtractor"
+    # and sm contains test names like "test/test_InfoExtractor.py::TestInfoExtractor::test_download_json"
+    matching_keys = [k for k in sm if k.startswith(case + '::')]
+
+    if len(matching_keys) == 0:
+        # this seems wrong to me idk. but just mirroring logic from test_failed function.
+        return True
+
+    if any(sm[k] in [TestStatus.FAILED.value, TestStatus.ERROR.value] for k in matching_keys):
+        return True
+
+    return False
 
 # MARK: Evaluation report functions
 def get_logs_eval(test_spec: TestSpec, log_fp: str) -> tuple[dict[str, str], bool]:
@@ -250,6 +275,9 @@ def get_eval_report(
     if prediction[KEY_PREDICTION] is None:
         report_map[instance_id]["patch_is_None"] = True
         return report_map
+    # if prediction["patch_content"] is None:
+        # report_map[instance_id]["patch_is_None"] = True
+        # return report_map
     report_map[instance_id]["patch_exists"] = True
 
     # Get evaluation logs
