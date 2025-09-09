@@ -257,6 +257,12 @@ parse_log_pvlib = parse_log_pytest
 parse_log_pyvista = parse_log_pytest
 parse_log_sqlfluff = parse_log_pytest
 parse_log_xarray = parse_log_pytest
+parse_log_fastapi = parse_log_pytest
+parse_log_youtube = parse_log_pytest
+parse_log_keras = parse_log_pytest
+parse_log_camel = parse_log_pytest
+parse_log_scrapy = parse_log_pytest
+parse_log_celery = parse_log_pytest
 
 parse_log_pydicom = parse_log_pytest_options
 parse_log_requests = parse_log_pytest_options
@@ -269,7 +275,11 @@ parse_log_sphinx = parse_log_pytest_v2
 
 MAP_REPO_TO_PARSER_PY = {
     "astropy/astropy": parse_log_astropy,
+    "camel-ai/camel": parse_log_camel,
+    "celery/celery": parse_log_celery,
     "django/django": parse_log_django,
+    "fastapi/fastapi": parse_log_fastapi,
+    "keras-team/keras": parse_log_keras,
     "marshmallow-code/marshmallow": parse_log_marshmallow,
     "matplotlib/matplotlib": parse_log_matplotlib,
     "mwaskom/seaborn": parse_log_seaborn,
@@ -282,8 +292,10 @@ MAP_REPO_TO_PARSER_PY = {
     "pylint-dev/pylint": parse_log_pylint,
     "pytest-dev/pytest": parse_log_pytest,
     "pyvista/pyvista": parse_log_pyvista,
+    "scrapy/scrapy": parse_log_scrapy,
     "scikit-learn/scikit-learn": parse_log_scikit,
     "sqlfluff/sqlfluff": parse_log_sqlfluff,
     "sphinx-doc/sphinx": parse_log_sphinx,
     "sympy/sympy": parse_log_sympy,
+    "ytdl-org/youtube-dl": parse_log_youtube,
 }
