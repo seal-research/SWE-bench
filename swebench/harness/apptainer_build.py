@@ -31,7 +31,7 @@ def build_sandbox(dataset):
             # Pull the Apptainer base image
             logger.info("Pulling Apptainer image...")
             result = subprocess.run(
-                [APPTAINER_BASH, "pull", "--disable-cache", "apptainer_base.sif", "docker://wellslu/apptainer_base:latest"],
+                [APPTAINER_BASH, "pull", "--disable-cache", "apptainer_base.sif", "docker://omnicodeorg/omnicode:swebench_base"],
                 cwd=str(build_dir),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
