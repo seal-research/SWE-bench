@@ -18,20 +18,20 @@ SHAREDIR = Path(f"/share/dutta/{USER}")
 SCRATCHDIR = Path(f"/scratch/{USER}")
 
 # Constants - Evaluation Log Directories (all under scratch now)
-BASE_IMAGE_BUILD_DIR = SCRATCHDIR / "logs/build_images/base"
-ENV_IMAGE_BUILD_DIR = SCRATCHDIR / "logs/build_images/env"
-INSTANCE_IMAGE_BUILD_DIR = SCRATCHDIR / "logs/build_images/instances"
-DEF_IMAGE_BUILD_DIR = SCRATCHDIR / "logs/build_images/def"
-RUN_EVALUATION_LOG_DIR = SCRATCHDIR / "logs/run_evaluation"
-RUN_VALIDATION_LOG_DIR = SCRATCHDIR / "logs/run_validation"
+SCRATCH_BASE_IMAGE_BUILD_DIR = SCRATCHDIR / "logs/build_images/base"
+SCRATCH_ENV_IMAGE_BUILD_DIR = SCRATCHDIR / "logs/build_images/env"
+SCRATCH_INSTANCE_IMAGE_BUILD_DIR = SCRATCHDIR / "logs/build_images/instances"
+SCRATCH_DEF_IMAGE_BUILD_DIR = SCRATCHDIR / "logs/build_images/def"
+SCRATCH_RUN_EVALUATION_LOG_DIR = SCRATCHDIR / "logs/run_evaluation"
+SCRATCH_RUN_VALIDATION_LOG_DIR = SCRATCHDIR / "logs/run_validation"
 
 # Constants - Evaluation Log Directories
-LOCAL_BASE_IMAGE_BUILD_DIR = Path("logs/build_images/base")
-LOCAL_ENV_IMAGE_BUILD_DIR = Path("logs/build_images/env")
-LOCAL_INSTANCE_IMAGE_BUILD_DIR = Path("logs/build_images/instances")
-LOCAL_DEF_IMAGE_BUILD_DIR = Path("logs/build_images/def")
-LOCAL_RUN_EVALUATION_LOG_DIR = Path("logs/run_evaluation")
-LOCAL_RUN_VALIDATION_LOG_DIR = Path("logs/run_validation")
+BASE_IMAGE_BUILD_DIR = Path("logs/build_images/base")
+ENV_IMAGE_BUILD_DIR = Path("logs/build_images/env")
+INSTANCE_IMAGE_BUILD_DIR = Path("logs/build_images/instances")
+DEF_IMAGE_BUILD_DIR = Path("logs/build_images/def")
+RUN_EVALUATION_LOG_DIR = Path("logs/run_evaluation")
+RUN_VALIDATION_LOG_DIR = Path("logs/run_validation")
 
 # Constants - Task Instance Class
 class SWEbenchInstance(TypedDict):

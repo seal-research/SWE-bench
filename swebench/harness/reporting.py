@@ -8,6 +8,7 @@ from swebench.harness.constants import (
     KEY_MODEL,
     KEY_PREDICTION,
     RUN_EVALUATION_LOG_DIR,
+    SCRATCH_RUN_EVALUATION_LOG_DIR,
     LOG_REPORT,
 )
 from swebench.harness.docker_utils import list_images
@@ -19,6 +20,7 @@ def make_run_report(
     full_dataset: list,
     run_id: str,
     client: Optional[docker.DockerClient] = None,
+    local: bool = False
 ) -> Path:
     """
     Make a final evaluation and run report of the instances that have been run.
@@ -55,13 +57,22 @@ def make_run_report(
         if prediction.get(KEY_PREDICTION, None) in ["", None]:
             empty_patch_ids.add(instance_id)
             continue
-        report_file = (
-            RUN_EVALUATION_LOG_DIR
-            / run_id
-            / prediction[KEY_MODEL].replace("/", "__")
-            / prediction[KEY_INSTANCE_ID]
-            / LOG_REPORT
-        )
+        if local: 
+            report_file = (
+                RUN_EVALUATION_LOG_DIR
+                / run_id
+                / prediction[KEY_MODEL].replace("/", "__")
+                / prediction[KEY_INSTANCE_ID]
+                / LOG_REPORT
+            )
+        else: 
+            report_file = (
+                SCRATCH_RUN_EVALUATION_LOG_DIR
+                / run_id
+                / prediction[KEY_MODEL].replace("/", "__")
+                / prediction[KEY_INSTANCE_ID]
+                / LOG_REPORT
+            )
         if report_file.exists():
             # If report file exists, then the instance has been run
             completed_ids.add(instance_id)

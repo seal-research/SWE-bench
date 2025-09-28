@@ -19,9 +19,9 @@ from swebench.harness.constants import (
     DOCKER_USER,
     DOCKER_WORKDIR,
     INSTANCE_IMAGE_BUILD_DIR,
-    LOCAL_INSTANCE_IMAGE_BUILD_DIR,
+    SCRATCH_INSTANCE_IMAGE_BUILD_DIR,
     DEF_IMAGE_BUILD_DIR,
-    LOCAL_DEF_IMAGE_BUILD_DIR,
+    SCRATCH_DEF_IMAGE_BUILD_DIR,
     KEY_INSTANCE_ID,
     KEY_MODEL,
     KEY_PREDICTION,
@@ -29,7 +29,7 @@ from swebench.harness.constants import (
     LOG_INSTANCE,
     LOG_TEST_OUTPUT,
     RUN_EVALUATION_LOG_DIR,
-    LOCAL_RUN_EVALUATION_LOG_DIR,
+    SCRATCH_RUN_EVALUATION_LOG_DIR,
     UTF8,
     APPTAINER_BASH,
     SHAREDIR,
@@ -102,9 +102,9 @@ def run_instance(
     instance_id = test_spec.instance_id
     model_name_or_path = pred.get(KEY_MODEL, "None").replace("/", "__")
     if local:
-        log_dir = LOCAL_RUN_EVALUATION_LOG_DIR / run_id / model_name_or_path / instance_id
-    else:
         log_dir = RUN_EVALUATION_LOG_DIR / run_id / model_name_or_path / instance_id
+    else:
+        log_dir = SCRATCH_RUN_EVALUATION_LOG_DIR / run_id / model_name_or_path / instance_id
 
     # Set up report file
     report_path = log_dir / LOG_REPORT
@@ -128,11 +128,11 @@ def run_instance(
     if not test_spec.is_remote_image:
         # Link the image build dir in the log dir
         if local: 
-            build_dir = LOCAL_INSTANCE_IMAGE_BUILD_DIR / test_spec.instance_image_key.replace(
+            build_dir = INSTANCE_IMAGE_BUILD_DIR / test_spec.instance_image_key.replace(
                 ":", "__"
             )
         else:
-            build_dir = INSTANCE_IMAGE_BUILD_DIR / test_spec.instance_image_key.replace(
+            build_dir = SCRATCH_INSTANCE_IMAGE_BUILD_DIR / test_spec.instance_image_key.replace(
                 ":", "__"
             )
         image_build_link = log_dir / "image_build_dir"
@@ -373,16 +373,16 @@ def run_instance_apptainer(
     # model_name_or_path = pred.get("model_name", "None").replace("/", "__")
     model_name_or_path = pred.get("model_name_or_path", "None").replace("/", "__")
     if local: 
-        log_dir = LOCAL_RUN_EVALUATION_LOG_DIR / run_id / model_name_or_path / instance_id
-    else:
         log_dir = RUN_EVALUATION_LOG_DIR / run_id / model_name_or_path / instance_id
+    else:
+        log_dir = SCRATCH_RUN_EVALUATION_LOG_DIR / run_id / model_name_or_path / instance_id
     log_dir.mkdir(parents=True, exist_ok=True)
 
     # Link the image build dir in the log dir
     if local: 
-        build_dir = LOCAL_DEF_IMAGE_BUILD_DIR / test_spec.instance_image_key.replace(":", "__")
-    else: 
         build_dir = DEF_IMAGE_BUILD_DIR / test_spec.instance_image_key.replace(":", "__")
+    else: 
+        build_dir = SCRATCH_DEF_IMAGE_BUILD_DIR / test_spec.instance_image_key.replace(":", "__")
     image_build_link = log_dir / "image_build_dir"
     if not image_build_link.exists():
         try:
@@ -665,7 +665,7 @@ def get_dataset_from_preds(
             prediction = predictions[instance[KEY_INSTANCE_ID]]
             if local:
                 test_output_file = (
-                    LOCAL_RUN_EVALUATION_LOG_DIR
+                    RUN_EVALUATION_LOG_DIR
                     / run_id
                     / prediction["model_name_or_path"].replace("/", "__")
                     / prediction[KEY_INSTANCE_ID]
@@ -673,7 +673,7 @@ def get_dataset_from_preds(
                 )
             else:
                 test_output_file = (
-                    RUN_EVALUATION_LOG_DIR
+                    SCRATCH_RUN_EVALUATION_LOG_DIR
                     / run_id
                     / prediction["model_name_or_path"].replace("/", "__")
                     / prediction[KEY_INSTANCE_ID]
@@ -699,7 +699,7 @@ def get_dataset_from_preds(
         prediction = predictions[instance[KEY_INSTANCE_ID]]
         if local:    
             report_file = (
-                LOCAL_RUN_EVALUATION_LOG_DIR
+                RUN_EVALUATION_LOG_DIR
                 / run_id
                 / prediction[KEY_MODEL].replace("/", "__")
                 / prediction[KEY_INSTANCE_ID]
@@ -707,7 +707,7 @@ def get_dataset_from_preds(
             )
         else:
             report_file = (
-                RUN_EVALUATION_LOG_DIR
+                SCRATCH_RUN_EVALUATION_LOG_DIR
                 / run_id
                 / prediction[KEY_MODEL].replace("/", "__")
                 / prediction[KEY_INSTANCE_ID]
