@@ -12,14 +12,16 @@ from swebench.harness.constants.python import *
 from swebench.harness.constants.ruby import *
 from swebench.harness.constants.rust import *
 
+SHAREDIR = Path("/share/dutta/ejt82")
+SCRATCHDIR = Path("/scratch")
 
-# Constants - Evaluation Log Directories
-BASE_IMAGE_BUILD_DIR = Path("logs/build_images/base")
-ENV_IMAGE_BUILD_DIR = Path("logs/build_images/env")
-INSTANCE_IMAGE_BUILD_DIR = Path("logs/build_images/instances")
-DEF_IMAGE_BUILD_DIR = Path("logs/build_images/def")
-RUN_EVALUATION_LOG_DIR = Path("logs/run_evaluation")
-RUN_VALIDATION_LOG_DIR = Path("logs/run_validation")
+# Constants - Evaluation Log Directories (all under scratch now)
+BASE_IMAGE_BUILD_DIR = SCRATCHDIR / "logs/build_images/base"
+ENV_IMAGE_BUILD_DIR = SCRATCHDIR / "logs/build_images/env"
+INSTANCE_IMAGE_BUILD_DIR = SCRATCHDIR / "logs/build_images/instances"
+DEF_IMAGE_BUILD_DIR = SCRATCHDIR / "logs/build_images/def"
+RUN_EVALUATION_LOG_DIR = SCRATCHDIR / "logs/run_evaluation"
+RUN_VALIDATION_LOG_DIR = SCRATCHDIR / "logs/run_validation"
 
 
 # Constants - Task Instance Class

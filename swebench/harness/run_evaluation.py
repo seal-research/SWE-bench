@@ -29,6 +29,7 @@ from swebench.harness.constants import (
     RUN_EVALUATION_LOG_DIR,
     UTF8,
     APPTAINER_BASH,
+    SHAREDIR,
 )
 from swebench.harness.docker_utils import (
     clean_images,
@@ -354,6 +355,7 @@ def run_instance_apptainer(
         ):
      # Set up logging directory
     instance_id = test_spec.instance_id
+    # model_name_or_path = pred.get("model_name", "None").replace("/", "__")
     model_name_or_path = pred.get("model_name_or_path", "None").replace("/", "__")
     log_dir = RUN_EVALUATION_LOG_DIR / run_id / model_name_or_path / instance_id
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -371,9 +373,13 @@ def run_instance_apptainer(
 
     # Set up report file + logger
     report_path = log_dir / LOG_REPORT
+
+    report_dir = SHAREDIR / f"logs/{instance_id}_report"
+    report_dir.mkdir(parents=True, exist_ok=True)
+
     if report_path.exists():
         return instance_id, json.loads(report_path.read_text())
-    log_file = log_dir / LOG_INSTANCE
+    log_file = report_dir / LOG_INSTANCE
     logger = setup_logger(instance_id, log_file)
 
     try:
@@ -383,6 +389,7 @@ def run_instance_apptainer(
             patch_file.write_text(pred[KEY_PREDICTION] or "")
         else:
             patch_file.write_text(pred[KEY_PREDICTION][KEY_PREDICTION] or "")
+        # patch_file.write_text(pred["patch_content"]["patch"] or "")
         logger.info(
             f"Intermediate patch for {instance_id} written to {patch_file}, now applying to container..."
         )
@@ -394,7 +401,7 @@ def run_instance_apptainer(
         for git_apply_cmd in GIT_APPLY_CMDS:
             result = subprocess.run(
                 [APPTAINER_BASH, "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
-                    f"cd apptainer_sandbox/testbed && {git_apply_cmd} patch.diff"],
+                    f"cd /testbed && {git_apply_cmd} patch.diff"],
                 cwd=str(build_dir),
                 capture_output=True,
                 text=True,
@@ -417,7 +424,7 @@ def run_instance_apptainer(
         # Get git diff before running eval script
         result = subprocess.run(
             [APPTAINER_BASH, "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
-                "cd apptainer_sandbox/testbed && git -c core.fileMode=false diff"],
+                "cd /testbed && git -c core.fileMode=false diff"],
             cwd=str(build_dir),
             capture_output=True,
             text=True,
@@ -427,9 +434,9 @@ def run_instance_apptainer(
         logger.info(f"Git diff before:\n{git_diff_output_before}")
 
         eval_file = Path(log_dir / "eval.sh")
-        cwd = os.getcwd()
-        eval_script = test_spec.eval_script.replace(" /", f" {cwd}/" + f"{str(build_dir)}/apptainer_sandbox/")
-        eval_file.write_text(eval_script)
+        # cwd = os.getcwd()
+        # eval_script = test_spec.eval_script.replace(" /", f" {cwd}/" + f"{str(build_dir)}/apptainer_sandbox/")
+        eval_file.write_text(test_spec.eval_script)
         logger.info(f"Eval script for {instance_id} written to {eval_file}; copying to sandbox...")
         shutil.copy(eval_file, build_dir / "apptainer_sandbox/eval.sh")
 
@@ -440,7 +447,7 @@ def run_instance_apptainer(
         try:
             result = subprocess.run(
                 [APPTAINER_BASH, "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
-                 "cd apptainer_sandbox && bash eval.sh"],
+                 "bash /eval.sh"],
                 cwd=str(build_dir),
                 capture_output=True,
                 text=True,
@@ -481,7 +488,7 @@ def run_instance_apptainer(
         # Get git diff after running eval script
         result = subprocess.run(
             [APPTAINER_BASH, "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
-                "cd apptainer_sandbox/testbed && git -c core.fileMode=false diff"],
+                "cd /testbed && git -c core.fileMode=false diff"],
             cwd=str(build_dir),
             capture_output=True,
             text=True,
@@ -510,6 +517,10 @@ def run_instance_apptainer(
         # Write report to report.json
         with open(report_path, "w") as f:
             f.write(json.dumps(report, indent=4))
+        report_path_shared = report_dir / LOG_REPORT
+        with open(report_path_shared, "w") as f:
+            f.write(json.dumps(report, indent=4))
+        
         
         return instance_id, report
     except EvaluationError as e:
