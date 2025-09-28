@@ -83,7 +83,7 @@ def run_instance(
     run_id: str,
     timeout: int | None = None,
     rewrite_reports: bool = False,
-    local: bool = false
+    local: bool = False
 ):
     """
     Run a single instance with the given prediction.
