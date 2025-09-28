@@ -139,9 +139,9 @@ def make_run_report(
                 "unremoved_images": list(sorted(unremoved_images)),
             }
         )
-    report_dir = Path(f"swebench_eval/" )
+    report_dir = Path(f"swebench_eval/{list(predictions.values())[0][KEY_MODEL].replace("/", "__")}" )
     report_dir.mkdir(parents=True, exist_ok=True)
-    report_filename = list(predictions.values())[0][KEY_MODEL].replace("/", "__") + f".{run_id}" + ".json"
+    report_filename = f".{run_id}" + ".json"
     report_file = report_dir / report_filename
     with open(report_file, "w") as f:
         print(json.dumps(report, indent=4), file=f)
