@@ -12,8 +12,10 @@ from swebench.harness.constants.python import *
 from swebench.harness.constants.ruby import *
 from swebench.harness.constants.rust import *
 
-SHAREDIR = Path("/share/dutta/ejt82")
-SCRATCHDIR = Path("/scratch")
+import os
+USER = os.getenv("USER")
+SHAREDIR = Path(f"/share/dutta/{USER}")
+SCRATCHDIR = Path(f"/scratch/{USER}")
 
 # Constants - Evaluation Log Directories (all under scratch now)
 BASE_IMAGE_BUILD_DIR = SCRATCHDIR / "logs/build_images/base"
