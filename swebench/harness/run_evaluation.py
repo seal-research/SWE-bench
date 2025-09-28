@@ -806,7 +806,7 @@ def main(
         print("No instances to run.")
     elif use_apptainer:
         # pull .sif + build sandbox with apptainer
-        build_sandbox(dataset)
+        build_sandbox(dataset, local=local)
         run_instance_apptainers(predictions, dataset, cache_level, clean, force_rebuild, max_workers, run_id, timeout, local)
     else:
         client = docker.from_env()
