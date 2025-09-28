@@ -25,6 +25,13 @@ DEF_IMAGE_BUILD_DIR = SCRATCHDIR / "logs/build_images/def"
 RUN_EVALUATION_LOG_DIR = SCRATCHDIR / "logs/run_evaluation"
 RUN_VALIDATION_LOG_DIR = SCRATCHDIR / "logs/run_validation"
 
+# Constants - Evaluation Log Directories
+LOCAL_BASE_IMAGE_BUILD_DIR = Path("logs/build_images/base")
+LOCAL_ENV_IMAGE_BUILD_DIR = Path("logs/build_images/env")
+LOCAL_INSTANCE_IMAGE_BUILD_DIR = Path("logs/build_images/instances")
+LOCAL_DEF_IMAGE_BUILD_DIR = Path("logs/build_images/def")
+LOCAL_RUN_EVALUATION_LOG_DIR = Path("logs/run_evaluation")
+LOCAL_RUN_VALIDATION_LOG_DIR = Path("logs/run_validation")
 
 # Constants - Task Instance Class
 class SWEbenchInstance(TypedDict):
