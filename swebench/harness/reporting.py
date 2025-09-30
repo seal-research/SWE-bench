@@ -151,7 +151,7 @@ def make_run_report(
     with open(report_file, "w") as f:
         print(json.dumps(report, indent=4), file=f)
     print(f"Report written to {report_file}")
-    if local:
+    if not local:
         logs_dir = (
             SCRATCH_RUN_EVALUATION_LOG_DIR
             / run_id
