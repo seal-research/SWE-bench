@@ -395,13 +395,9 @@ def run_instance_apptainer(
     # Set up report file + logger
     report_path = log_dir / LOG_REPORT
 
-    report_dir = log_dir / f"logs/{instance_id}_report"
-        
-    report_dir.mkdir(parents=True, exist_ok=True)
-
     if report_path.exists():
         return instance_id, json.loads(report_path.read_text())
-    log_file = report_dir / LOG_INSTANCE
+    log_file = log_dir / LOG_INSTANCE
     logger = setup_logger(instance_id, log_file)
 
     try:
@@ -537,18 +533,9 @@ def run_instance_apptainer(
         )
 
         # Write report to report.json
-        if local: 
-            with open(report_path, "w") as f:
-                f.write(json.dumps(report, indent=4))
-        else: 
-            report_path_shared = report_dir / LOG_REPORT
-            with open(report_path_shared, "w") as f:
-                f.write(json.dumps(report, indent=4))
-        if not local: 
-            shutil.copy(build_dir, SHAREDIR / f"logs/{run_id}/{model_name_or_path}/{instance_id}")
-            shutil.copy(log_dir, SHAREDIR / f"logs/{run_id}/{model_name_or_path}/{instance_id}")
-            shutil.rmtree(build_dir)
-            shutil.rmtree(log_dir)
+        with open(report_path, "w") as f:
+            f.write(json.dumps(report, indent=4))
+    
         return instance_id, report
     except EvaluationError as e:
         error_msg = traceback.format_exc()
@@ -585,10 +572,11 @@ def run_instance_apptainer(
                 logger.error(f"Failed to remove Apptainer sandbox or base image file: {e}")
             finally: 
                 if not local: 
-                    shutil.copy(build_dir / "build_image.log", SHAREDIR / f"logs/{run_id}/{model_name_or_path}/{instance_id}")
-                    shutil.copy(log_dir, SHAREDIR / f"logs/{run_id}/{model_name_or_path}/{instance_id}")
+                    dst = SHAREDIR / f"logs/{run_id}/{model_name_or_path}/{instance_id}"
+                    dst.mkdir(parents=True, exist_ok=True)
+                    shutil.copy(build_dir / "build_image.log", dst)
+                    print(f"Removing workdir: {build_dir} from scratch. ")
                     shutil.rmtree(build_dir)
-                    shutil.rmtree(log_dir)
         # close the logger
         close_logger(logger)
     return

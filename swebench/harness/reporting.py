@@ -2,6 +2,7 @@ import docker
 import json
 from pathlib import Path
 from typing import Optional
+import shutil
 
 from swebench.harness.constants import (
     KEY_INSTANCE_ID,
@@ -150,4 +151,16 @@ def make_run_report(
     with open(report_file, "w") as f:
         print(json.dumps(report, indent=4), file=f)
     print(f"Report written to {report_file}")
+    if local:
+        logs_dir = (
+            SCRATCH_RUN_EVALUATION_LOG_DIR
+            / run_id
+            / prediction[KEY_MODEL].replace("/", "__")
+            / prediction[KEY_INSTANCE_ID]
+        )
+        dst = SHAREDIR / f"logs/{run_id}/{prediction[KEY_MODEL].replace("/", "__")}/{instance_id}"
+        dst.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(logs_dir, dst)
+        print(f"Removing logdir: {logs_dir} from scratch. ")
+        shutil.rmtree(logs_dir)
     return report_file
