@@ -10,6 +10,7 @@ from swebench.harness.constants import (
     RUN_EVALUATION_LOG_DIR,
     SCRATCH_RUN_EVALUATION_LOG_DIR,
     LOG_REPORT,
+    SHAREDIR
 )
 from swebench.harness.docker_utils import list_images
 from swebench.harness.test_spec.test_spec import make_test_spec
@@ -139,9 +140,12 @@ def make_run_report(
                 "unremoved_images": list(sorted(unremoved_images)),
             }
         )
-    report_dir = Path(f"swebench_eval/{list(predictions.values())[0][KEY_MODEL].replace("/", "__")}" )
+    if local: 
+        report_dir = Path(f"swebench_eval/{list(predictions.values())[0][KEY_MODEL].replace("/", "__")}" )
+    else: 
+        report_dir = SHAREDIR / "logs/results"
     report_dir.mkdir(parents=True, exist_ok=True)
-    report_filename = f".{run_id}" + ".json"
+    report_filename = f"{instance_id}" + ".json"
     report_file = report_dir / report_filename
     with open(report_file, "w") as f:
         print(json.dumps(report, indent=4), file=f)

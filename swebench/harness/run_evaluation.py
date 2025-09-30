@@ -395,10 +395,7 @@ def run_instance_apptainer(
     # Set up report file + logger
     report_path = log_dir / LOG_REPORT
 
-    if local: 
-        report_dir = log_dir / f"logs/{instance_id}_report"
-    else: 
-        report_dir = SHAREDIR / f"logs/{instance_id}_report"
+    report_dir = log_dir / f"logs/{instance_id}_report"
         
     report_dir.mkdir(parents=True, exist_ok=True)
 
@@ -540,13 +537,18 @@ def run_instance_apptainer(
         )
 
         # Write report to report.json
-        with open(report_path, "w") as f:
-            f.write(json.dumps(report, indent=4))
-        report_path_shared = report_dir / LOG_REPORT
-        with open(report_path_shared, "w") as f:
-            f.write(json.dumps(report, indent=4))
-        
-        
+        if local: 
+            with open(report_path, "w") as f:
+                f.write(json.dumps(report, indent=4))
+        else: 
+            report_path_shared = report_dir / LOG_REPORT
+            with open(report_path_shared, "w") as f:
+                f.write(json.dumps(report, indent=4))
+        if not local: 
+            shutil.copy(build_dir, SHAREDIR / f"logs/{run_id}/{model_name_or_path}/{instance_id}")
+            shutil.copy(log_dir, SHAREDIR / f"logs/{run_id}/{model_name_or_path}/{instance_id}")
+            shutil.rmtree(build_dir)
+            shutil.rmtree(log_dir)
         return instance_id, report
     except EvaluationError as e:
         error_msg = traceback.format_exc()
@@ -581,6 +583,12 @@ def run_instance_apptainer(
                     logger.info(f"Apptainer base image file not found: {apptainer_base_file}")
             except Exception as e:
                 logger.error(f"Failed to remove Apptainer sandbox or base image file: {e}")
+            finally: 
+                if not local: 
+                    shutil.copy(build_dir / "build_image.log", SHAREDIR / f"logs/{run_id}/{model_name_or_path}/{instance_id}")
+                    shutil.copy(log_dir, SHAREDIR / f"logs/{run_id}/{model_name_or_path}/{instance_id}")
+                    shutil.rmtree(build_dir)
+                    shutil.rmtree(log_dir)
         # close the logger
         close_logger(logger)
     return
@@ -608,6 +616,7 @@ def run_instance_apptainers(
                 predictions[test_spec.instance_id],
                 run_id,
                 timeout,
+                clean,
                 local
             )
         )
