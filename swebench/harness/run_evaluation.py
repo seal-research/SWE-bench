@@ -780,7 +780,7 @@ def main(
 
     # get dataset from predictions
     dataset = get_dataset_from_preds(
-        dataset_name, split, instance_ids, predictions, run_id, rewrite_reports, local
+        dataset_name, split, instance_ids, predictions, run_id, rewrite_reports, local=local
     )
     full_dataset = load_swebench_dataset(dataset_name, split, instance_ids)
 
