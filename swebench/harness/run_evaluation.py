@@ -19,7 +19,9 @@ from swebench.harness.constants import (
     DOCKER_USER,
     DOCKER_WORKDIR,
     INSTANCE_IMAGE_BUILD_DIR,
+    SCRATCH_INSTANCE_IMAGE_BUILD_DIR,
     DEF_IMAGE_BUILD_DIR,
+    SCRATCH_DEF_IMAGE_BUILD_DIR,
     KEY_INSTANCE_ID,
     KEY_MODEL,
     KEY_PREDICTION,
@@ -27,8 +29,10 @@ from swebench.harness.constants import (
     LOG_INSTANCE,
     LOG_TEST_OUTPUT,
     RUN_EVALUATION_LOG_DIR,
+    SCRATCH_RUN_EVALUATION_LOG_DIR,
     UTF8,
     APPTAINER_BASH,
+    SHAREDIR,
 )
 from swebench.harness.docker_utils import (
     clean_images,
@@ -79,6 +83,7 @@ def run_instance(
     run_id: str,
     timeout: int | None = None,
     rewrite_reports: bool = False,
+    local: bool = False
 ):
     """
     Run a single instance with the given prediction.
@@ -96,7 +101,10 @@ def run_instance(
     # Set up logging directory
     instance_id = test_spec.instance_id
     model_name_or_path = pred.get(KEY_MODEL, "None").replace("/", "__")
-    log_dir = RUN_EVALUATION_LOG_DIR / run_id / model_name_or_path / instance_id
+    if local:
+        log_dir = RUN_EVALUATION_LOG_DIR / run_id / model_name_or_path / instance_id
+    else:
+        log_dir = SCRATCH_RUN_EVALUATION_LOG_DIR / run_id / model_name_or_path / instance_id
 
     # Set up report file
     report_path = log_dir / LOG_REPORT
@@ -119,9 +127,14 @@ def run_instance(
 
     if not test_spec.is_remote_image:
         # Link the image build dir in the log dir
-        build_dir = INSTANCE_IMAGE_BUILD_DIR / test_spec.instance_image_key.replace(
-            ":", "__"
-        )
+        if local: 
+            build_dir = INSTANCE_IMAGE_BUILD_DIR / test_spec.instance_image_key.replace(
+                ":", "__"
+            )
+        else:
+            build_dir = SCRATCH_INSTANCE_IMAGE_BUILD_DIR / test_spec.instance_image_key.replace(
+                ":", "__"
+            )
         image_build_link = log_dir / "image_build_dir"
         if not image_build_link.exists():
             try:
@@ -282,6 +295,7 @@ def run_instances(
     namespace: str | None = "swebench",
     instance_image_tag: str = "latest",
     rewrite_reports: bool = False,
+    local: bool = False
 ):
     """
     Run all instances for the given predictions in parallel.
@@ -337,6 +351,7 @@ def run_instances(
                 run_id,
                 timeout,
                 rewrite_reports,
+                local
             )
         )
 
@@ -351,15 +366,23 @@ def run_instance_apptainer(
         run_id: str,
         timeout: int | None = None,
         rm_image: bool = True,
+        local: bool = False
         ):
      # Set up logging directory
     instance_id = test_spec.instance_id
+    # model_name_or_path = pred.get("model_name", "None").replace("/", "__")
     model_name_or_path = pred.get("model_name_or_path", "None").replace("/", "__")
-    log_dir = RUN_EVALUATION_LOG_DIR / run_id / model_name_or_path / instance_id
+    if local: 
+        log_dir = RUN_EVALUATION_LOG_DIR / run_id / model_name_or_path / instance_id
+    else:
+        log_dir = SCRATCH_RUN_EVALUATION_LOG_DIR / run_id / model_name_or_path / instance_id
     log_dir.mkdir(parents=True, exist_ok=True)
 
     # Link the image build dir in the log dir
-    build_dir = DEF_IMAGE_BUILD_DIR / test_spec.instance_image_key.replace(":", "__")
+    if local: 
+        build_dir = DEF_IMAGE_BUILD_DIR / test_spec.instance_image_key.replace(":", "__")
+    else: 
+        build_dir = SCRATCH_DEF_IMAGE_BUILD_DIR / test_spec.instance_image_key.replace(":", "__")
     image_build_link = log_dir / "image_build_dir"
     if not image_build_link.exists():
         try:
@@ -371,6 +394,7 @@ def run_instance_apptainer(
 
     # Set up report file + logger
     report_path = log_dir / LOG_REPORT
+
     if report_path.exists():
         return instance_id, json.loads(report_path.read_text())
     log_file = log_dir / LOG_INSTANCE
@@ -383,6 +407,7 @@ def run_instance_apptainer(
             patch_file.write_text(pred[KEY_PREDICTION] or "")
         else:
             patch_file.write_text(pred[KEY_PREDICTION][KEY_PREDICTION] or "")
+        # patch_file.write_text(pred["patch_content"]["patch"] or "")
         logger.info(
             f"Intermediate patch for {instance_id} written to {patch_file}, now applying to container..."
         )
@@ -394,7 +419,7 @@ def run_instance_apptainer(
         for git_apply_cmd in GIT_APPLY_CMDS:
             result = subprocess.run(
                 [APPTAINER_BASH, "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
-                    f"cd apptainer_sandbox/testbed && {git_apply_cmd} patch.diff"],
+                    f"cd /testbed && {git_apply_cmd} patch.diff"],
                 cwd=str(build_dir),
                 capture_output=True,
                 text=True,
@@ -417,7 +442,7 @@ def run_instance_apptainer(
         # Get git diff before running eval script
         result = subprocess.run(
             [APPTAINER_BASH, "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
-                "cd apptainer_sandbox/testbed && git -c core.fileMode=false diff"],
+                "cd /testbed && git -c core.fileMode=false diff"],
             cwd=str(build_dir),
             capture_output=True,
             text=True,
@@ -427,9 +452,9 @@ def run_instance_apptainer(
         logger.info(f"Git diff before:\n{git_diff_output_before}")
 
         eval_file = Path(log_dir / "eval.sh")
-        cwd = os.getcwd()
-        eval_script = test_spec.eval_script.replace(" /", f" {cwd}/" + f"{str(build_dir)}/apptainer_sandbox/")
-        eval_file.write_text(eval_script)
+        # cwd = os.getcwd()
+        # eval_script = test_spec.eval_script.replace(" /", f" {cwd}/" + f"{str(build_dir)}/apptainer_sandbox/")
+        eval_file.write_text(test_spec.eval_script)
         logger.info(f"Eval script for {instance_id} written to {eval_file}; copying to sandbox...")
         shutil.copy(eval_file, build_dir / "apptainer_sandbox/eval.sh")
 
@@ -440,7 +465,7 @@ def run_instance_apptainer(
         try:
             result = subprocess.run(
                 [APPTAINER_BASH, "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
-                 "cd apptainer_sandbox && bash eval.sh"],
+                 "bash /eval.sh"],
                 cwd=str(build_dir),
                 capture_output=True,
                 text=True,
@@ -481,7 +506,7 @@ def run_instance_apptainer(
         # Get git diff after running eval script
         result = subprocess.run(
             [APPTAINER_BASH, "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
-                "cd apptainer_sandbox/testbed && git -c core.fileMode=false diff"],
+                "cd /testbed && git -c core.fileMode=false diff"],
             cwd=str(build_dir),
             capture_output=True,
             text=True,
@@ -510,7 +535,7 @@ def run_instance_apptainer(
         # Write report to report.json
         with open(report_path, "w") as f:
             f.write(json.dumps(report, indent=4))
-        
+    
         return instance_id, report
     except EvaluationError as e:
         error_msg = traceback.format_exc()
@@ -545,6 +570,13 @@ def run_instance_apptainer(
                     logger.info(f"Apptainer base image file not found: {apptainer_base_file}")
             except Exception as e:
                 logger.error(f"Failed to remove Apptainer sandbox or base image file: {e}")
+            finally: 
+                if not local: 
+                    dst = SHAREDIR / f"logs/{run_id}/{model_name_or_path}/{instance_id}"
+                    dst.mkdir(parents=True, exist_ok=True)
+                    shutil.copy(build_dir / "build_image.log", dst)
+                    print(f"Removing workdir: {build_dir} from scratch. ")
+                    shutil.rmtree(build_dir)
         # close the logger
         close_logger(logger)
     return
@@ -558,6 +590,7 @@ def run_instance_apptainers(
         max_workers: int,
         run_id: str,
         timeout: int,
+        local: bool = False
         ):
     test_specs = list(map(make_test_spec, instances))
     # run instances in parallel
@@ -571,6 +604,8 @@ def run_instance_apptainers(
                 predictions[test_spec.instance_id],
                 run_id,
                 timeout,
+                clean,
+                local
             )
         )
 
@@ -587,6 +622,7 @@ def get_dataset_from_preds(
     run_id: str,
     rewrite_reports: bool,
     exclude_completed: bool = True,
+    local: bool = False
 ):
     """
     Return only instances that have predictions and are in the dataset.
@@ -624,13 +660,23 @@ def get_dataset_from_preds(
             if instance[KEY_INSTANCE_ID] not in predictions:
                 continue
             prediction = predictions[instance[KEY_INSTANCE_ID]]
-            test_output_file = (
-                RUN_EVALUATION_LOG_DIR
-                / run_id
-                / prediction["model_name_or_path"].replace("/", "__")
-                / prediction[KEY_INSTANCE_ID]
-                / "test_output.txt"
-            )
+            if local:
+                test_output_file = (
+                    RUN_EVALUATION_LOG_DIR
+                    / run_id
+                    / prediction["model_name_or_path"].replace("/", "__")
+                    / prediction[KEY_INSTANCE_ID]
+                    / "test_output.txt"
+                )
+            else:
+                test_output_file = (
+                    SCRATCH_RUN_EVALUATION_LOG_DIR
+                    / run_id
+                    / prediction["model_name_or_path"].replace("/", "__")
+                    / prediction[KEY_INSTANCE_ID]
+                    / "test_output.txt"
+                )
+
             if test_output_file.exists():
                 test_output_ids.add(instance[KEY_INSTANCE_ID])
         dataset = [
@@ -648,13 +694,22 @@ def get_dataset_from_preds(
             # skip instances without predictions
             continue
         prediction = predictions[instance[KEY_INSTANCE_ID]]
-        report_file = (
-            RUN_EVALUATION_LOG_DIR
-            / run_id
-            / prediction[KEY_MODEL].replace("/", "__")
-            / prediction[KEY_INSTANCE_ID]
-            / LOG_REPORT
-        )
+        if local:    
+            report_file = (
+                RUN_EVALUATION_LOG_DIR
+                / run_id
+                / prediction[KEY_MODEL].replace("/", "__")
+                / prediction[KEY_INSTANCE_ID]
+                / LOG_REPORT
+            )
+        else:
+            report_file = (
+                SCRATCH_RUN_EVALUATION_LOG_DIR
+                / run_id
+                / prediction[KEY_MODEL].replace("/", "__")
+                / prediction[KEY_INSTANCE_ID]
+                / LOG_REPORT
+            )
         if report_file.exists():
             completed_ids.add(instance[KEY_INSTANCE_ID])
 
@@ -697,6 +752,7 @@ def main(
     instance_image_tag: str = "latest",
     report_dir: str = ".",
     use_apptainer: bool = False,
+    local: bool = False
 ):
     """
     Run evaluation harness for the given dataset and predictions.
@@ -724,7 +780,7 @@ def main(
 
     # get dataset from predictions
     dataset = get_dataset_from_preds(
-        dataset_name, split, instance_ids, predictions, run_id, rewrite_reports
+        dataset_name, split, instance_ids, predictions, run_id, rewrite_reports, local=local
     )
     full_dataset = load_swebench_dataset(dataset_name, split, instance_ids)
 
@@ -747,8 +803,8 @@ def main(
         print("No instances to run.")
     elif use_apptainer:
         # pull .sif + build sandbox with apptainer
-        build_sandbox(dataset)
-        run_instance_apptainers(predictions, dataset, cache_level, clean, force_rebuild, max_workers, run_id, timeout)
+        build_sandbox(dataset, local=local)
+        run_instance_apptainers(predictions, dataset, cache_level, clean, force_rebuild, max_workers, run_id, timeout, local)
     else:
         client = docker.from_env()
         existing_images = list_images(client)
@@ -768,6 +824,7 @@ def main(
             namespace=namespace,
             instance_image_tag=instance_image_tag,
             rewrite_reports=rewrite_reports,
+            local=local
         )
 
         # clean images + make final report
@@ -864,8 +921,8 @@ if __name__ == "__main__":
     # Modal execution args
     parser.add_argument("--modal", type=str2bool, default=False, help="Run on Modal")
 
-
     parser.add_argument("--use_apptainer", type=str2bool, default=False, help="use apptainer or docker")
+    parser.add_argument("--local", type=str2bool, default=False, help="Running locally or on g2/unicorn")
 
     args = parser.parse_args()
     main(**vars(args))

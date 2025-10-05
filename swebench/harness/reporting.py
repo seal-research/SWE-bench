@@ -2,13 +2,16 @@ import docker
 import json
 from pathlib import Path
 from typing import Optional
+import shutil
 
 from swebench.harness.constants import (
     KEY_INSTANCE_ID,
     KEY_MODEL,
     KEY_PREDICTION,
     RUN_EVALUATION_LOG_DIR,
+    SCRATCH_RUN_EVALUATION_LOG_DIR,
     LOG_REPORT,
+    SHAREDIR
 )
 from swebench.harness.docker_utils import list_images
 from swebench.harness.test_spec.test_spec import make_test_spec
@@ -19,6 +22,7 @@ def make_run_report(
     full_dataset: list,
     run_id: str,
     client: Optional[docker.DockerClient] = None,
+    local: bool = False
 ) -> Path:
     """
     Make a final evaluation and run report of the instances that have been run.
@@ -55,13 +59,22 @@ def make_run_report(
         if prediction.get(KEY_PREDICTION, None) in ["", None]:
             empty_patch_ids.add(instance_id)
             continue
-        report_file = (
-            RUN_EVALUATION_LOG_DIR
-            / run_id
-            / prediction[KEY_MODEL].replace("/", "__")
-            / prediction[KEY_INSTANCE_ID]
-            / LOG_REPORT
-        )
+        if local: 
+            report_file = (
+                RUN_EVALUATION_LOG_DIR
+                / run_id
+                / prediction[KEY_MODEL].replace("/", "__")
+                / prediction[KEY_INSTANCE_ID]
+                / LOG_REPORT
+            )
+        else: 
+            report_file = (
+                SCRATCH_RUN_EVALUATION_LOG_DIR
+                / run_id
+                / prediction[KEY_MODEL].replace("/", "__")
+                / prediction[KEY_INSTANCE_ID]
+                / LOG_REPORT
+            )
         if report_file.exists():
             # If report file exists, then the instance has been run
             completed_ids.add(instance_id)
@@ -128,12 +141,26 @@ def make_run_report(
                 "unremoved_images": list(sorted(unremoved_images)),
             }
         )
-    report_file = Path(
-        list(predictions.values())[0][KEY_MODEL].replace("/", "__")
-        + f".{run_id}"
-        + ".json"
-    )
+    if local: 
+        report_dir = Path(f"swebench_eval/{list(predictions.values())[0][KEY_MODEL].replace("/", "__")}" )
+    else: 
+        report_dir = SHAREDIR / "logs/results"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    report_filename = f"{instance_id}" + ".json"
+    report_file = report_dir / report_filename
     with open(report_file, "w") as f:
         print(json.dumps(report, indent=4), file=f)
     print(f"Report written to {report_file}")
+    if not local:
+        logs_dir = (
+            SCRATCH_RUN_EVALUATION_LOG_DIR
+            / run_id
+            / prediction[KEY_MODEL].replace("/", "__")
+            / prediction[KEY_INSTANCE_ID]
+        )
+        dst = SHAREDIR / f"logs/{run_id}/{prediction[KEY_MODEL].replace("/", "__")}/{instance_id}"
+        dst.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(logs_dir, dst)
+        print(f"Removing logdir: {logs_dir} from scratch. ")
+        shutil.rmtree(logs_dir)
     return report_file

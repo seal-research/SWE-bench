@@ -3,7 +3,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 
-from swebench.harness.constants import DEF_IMAGE_BUILD_DIR, APPTAINER_BASH
+from swebench.harness.constants import DEF_IMAGE_BUILD_DIR, SCRATCH_DEF_IMAGE_BUILD_DIR, APPTAINER_BASH
 
 from swebench.harness.docker_build import (
     close_logger,
@@ -14,7 +14,7 @@ from swebench.harness.test_spec.test_spec import get_test_specs_from_dataset
 
 from swebench.harness.docker_build import BuildImageError
 
-def build_sandbox(dataset):
+def build_sandbox(dataset, local):
     test_specs = get_test_specs_from_dataset(dataset)
     for test_spec in test_specs:
         # build setup file and put in logs/instance_id folder
@@ -23,7 +23,10 @@ def build_sandbox(dataset):
                     "setup_repo.sh": test_spec.install_repo_script,
                 }
         
-        build_dir = DEF_IMAGE_BUILD_DIR / test_spec.instance_image_key.replace(":", "__")
+        if local: 
+            build_dir = DEF_IMAGE_BUILD_DIR / test_spec.instance_image_key.replace(":", "__")
+        else: 
+            build_dir = SCRATCH_DEF_IMAGE_BUILD_DIR / test_spec.instance_image_key.replace(":", "__")
         logger = setup_logger("def", build_dir / "build_image.log")
         logger.info("Building image def\n")
 
@@ -74,7 +77,7 @@ def build_sandbox(dataset):
             
                 result = subprocess.run(
                     [APPTAINER_BASH, "exec", "--writable", "apptainer_sandbox", "bash", "-c", 
-                    f"cd apptainer_sandbox && bash /root/{setup_script_name}"],
+                    f"bash /root/{setup_script_name}"],
                     cwd=str(build_dir),
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
